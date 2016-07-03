@@ -52,6 +52,8 @@
 
 #include "mem/cache/blk.hh" // base class
 
+ const double RATIO = 0.9999306877;
+
 /**
  * An associative set of cache blocks.
  */
@@ -120,6 +122,10 @@ template <class Blktype>
 void
 CacheSet<Blktype>::moveToHead(Blktype *blk)
 {
+    for (int i = 0; i < assoc; ++i)
+        blks[i]->score *= RATIO;
+    blk->score += 1.0;
+
     // nothing to do if blk is already head
     if (blks[0] == blk)
         return;
@@ -131,6 +137,14 @@ CacheSet<Blktype>::moveToHead(Blktype *blk)
     int i = 0;
     Blktype *next = blk;
 
+    while (i < assoc - 1)
+    {
+        if (blk->score >= blks[i]->score)
+            break;
+        i++;
+    }
+
+    // We should place it at blks[i].
     do {
         assert(i < assoc);
         // swap blks[i] and next

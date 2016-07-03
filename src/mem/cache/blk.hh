@@ -129,6 +129,8 @@ class CacheBlk
 
     Tick tickInserted;
 
+    double score;
+
   protected:
     /**
      * Represents that the indicated thread context has a "lock" on
@@ -176,7 +178,7 @@ class CacheBlk
           asid(-1), tag(0), data(0) ,size(0), status(0), whenReady(0),
           set(-1), isTouched(false), refCount(0),
           srcMasterId(Request::invldMasterId),
-          tickInserted(0)
+          tickInserted(0), score(0)
     {}
 
     /**
