@@ -49,6 +49,7 @@
 #define __CACHESET_HH__
 
 #include <cassert>
+#include <iostream>
 
 #include "mem/cache/blk.hh" // base class
 
@@ -64,6 +65,8 @@ class CacheSet
 
     /** Cache blocks in this set, maintained in LRU order 0 = MRU. */
     Blktype **blks;
+    int *MRU;
+    int MRU_count;
 
     /**
      * Find a block matching the tag in this set.
@@ -87,6 +90,17 @@ class CacheSet
      */
     void moveToTail(Blktype *blk);
 
+    void setMRUUp(Blktype *blk);
+
+    void setMRUDown(Blktype *blk);
+
+    int findMRU();
+
+    void setTREEUp(Blktype *blk);
+
+    void setTREEDown(Blktype *blk);
+
+    int findTREE();
 };
 
 template <class Blktype>
@@ -164,6 +178,131 @@ CacheSet<Blktype>::moveToTail(Blktype *blk)
         next = tmp;
         --i;
     } while (next != blk);
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::setMRUUp(Blktype *blk)
+{
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+    {
+        if(blks[i] == blk)
+        {
+            MRU[i] = 1;
+            MRU_count += 1;
+            if(MRU_count >= assoc)
+            {
+                for(int j = 0; j < assoc; j++)
+                    MRU[j] = 0;
+                MRU[i] = 1;
+                MRU_count = 1;
+            }
+            break;
+        }
+    }
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::setMRUDown(Blktype *blk)
+{
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+    {
+        if(blks[i] == blk)
+        {
+            if(MRU[i] == 1)
+                MRU_count -= 1;
+            MRU[i] = 0;
+            break;
+        }
+    }
+}
+
+template <class Blktype>
+int
+CacheSet<Blktype>::findMRU()
+{
+    for(int i = 0; i < assoc; i++)
+        if(MRU[i] == 0)
+            return i;
+    return assoc - 1;
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::setTREEDown(Blktype *blk)
+{
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+        if(blks[i] == blk)
+            break;
+    if(i == -1)
+        return;
+    int index = assoc / 2;
+    int last = 0;
+    int li = 2;
+    do{
+        //std::cout<<"i / index"<<i / index<<std::endl;
+        MRU[last] = i / index;
+        // std::cout<<"down! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
+        //std::cout<<"change MRU[last] down to: "<<MRU[last]<<std::endl;
+        last = 2 * (last - li / 2 + 1) + i / index + li - 1;
+        li *= 2;
+        i -= (i / index) * index;
+        index /= 2;
+    }while(li <= assoc);
+    // std::cout<<"down MRU:"<<std::endl;
+    // for(i = 0; i < assoc; i++)
+    //     std::cout<<MRU[i]<<" ";
+    // std::cout<<std::endl;
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::setTREEUp(Blktype *blk)
+{
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+        if(blks[i] == blk)
+            break;
+    if(i == -1)
+        return;
+    int index = assoc / 2;
+    int last = 0;
+    int li = 2;
+    do{
+        //td::cout<<"i / index"<<i / index<<"~i / index"<<~(i / index)<<std::endl;
+        MRU[last] = 1 - (i / index);
+        //std::cout<<"up! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
+        //std::cout<<"change MRU[last] up to: "<<MRU[last]<<std::endl;
+        last = 2 * (last - li / 2 + 1) + i / index + li - 1;
+        li *= 2;
+        i -= (i / index) * index;
+        index /= 2;
+    }while(li <= assoc);
+    // std::cout<<"up MRU:"<<std::endl;
+    // for(i = 0; i < assoc; i++)
+    //     std::cout<<MRU[i]<<" ";
+    // std::cout<<std::endl;
+}
+
+template <class Blktype>
+int
+CacheSet<Blktype>::findTREE()
+{
+    int li = 2;
+    int last = 0;
+    //std::cout<<"assoc:"<<assoc<<std::endl;
+    while(li < assoc)
+    {
+        //std::cout<<"last:"<<last<<" MRU[last]:"<<MRU[last]<<" li:"<<li<<" 2 * (last - li / 2 + 1) + MRU[last] + li - 1 = "<<2 * (last - li / 2 + 1) + MRU[last] + li - 1<<std::endl;
+        last = 2 * (last - li / 2 + 1) + MRU[last] + li - 1;
+        li *= 2;
+    }
+    //std::cout<<"result:"<<2 * (last - li / 2 + 1) + MRU[last]<<" assoc:"<<assoc<<" last:"<<last<<std::endl;
+    return 2 * (last - li / 2 + 1) + MRU[last];
 }
 
 #endif

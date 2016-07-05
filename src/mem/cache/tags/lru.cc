@@ -48,21 +48,22 @@
 #include "debug/CacheRepl.hh"
 #include "mem/cache/tags/lru.hh"
 #include "mem/cache/base.hh"
+#include <iostream>
 
 LRU::LRU(const Params *p)
     : BaseSetAssoc(p)
 {
 }
 
-BaseSetAssoc::BlkType*
+CacheBlk*
 LRU::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
 {
-    BlkType *blk = BaseSetAssoc::accessBlock(addr, is_secure, lat, master_id);
+    CacheBlk *blk = BaseSetAssoc::accessBlock(addr, is_secure, lat, master_id);
 
     if (blk != NULL) {
-        // move this block to head of the MRU list
-        sets[blk->set].moveToHead(blk);
-        DPRINTF(CacheRepl, "set %x: moving blk %x (%s) to MRU\n",
+        // move this block to head of the TREE list
+        sets[blk->set].setTREEUp(blk);
+        DPRINTF(CacheRepl, "set %x: moving blk %x (%s) to TREE\n",
                 blk->set, regenerateBlkAddr(blk->tag, blk->set),
                 is_secure ? "s" : "ns");
     }
@@ -70,12 +71,13 @@ LRU::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
     return blk;
 }
 
-BaseSetAssoc::BlkType*
+CacheBlk*
 LRU::findVictim(Addr addr) const
 {
+    //std::cout<<"findVictim by tree"<<std::endl;
     int set = extractSet(addr);
     // grab a replacement candidate
-    BlkType *blk = sets[set].blks[assoc - 1];
+    BlkType *blk = sets[set].blks[sets[set].findTREE()];
 
     if (blk->isValid()) {
         DPRINTF(CacheRepl, "set %x: selecting blk %x for replacement\n",
@@ -91,17 +93,17 @@ LRU::insertBlock(PacketPtr pkt, BlkType *blk)
     BaseSetAssoc::insertBlock(pkt, blk);
 
     int set = extractSet(pkt->getAddr());
-    sets[set].moveToHead(blk);
+    sets[set].setTREEUp(blk);
 }
 
 void
-LRU::invalidate(BlkType *blk)
+LRU::invalidate(CacheBlk *blk)
 {
     BaseSetAssoc::invalidate(blk);
 
     // should be evicted before valid blocks
     int set = blk->set;
-    sets[set].moveToTail(blk);
+    sets[set].setTREEDown(blk);
 }
 
 LRU*
