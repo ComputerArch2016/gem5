@@ -62,7 +62,7 @@ LRU::accessBlock(Addr addr, bool is_secure, Cycles &lat, int master_id)
 
     if (blk != NULL) {
         // move this block to head of the TREE list
-        sets[blk->set].setTREEUp(blk);
+        sets[blk->set].hit2q(blk);
         DPRINTF(CacheRepl, "set %x: moving blk %x (%s) to TREE\n",
                 blk->set, regenerateBlkAddr(blk->tag, blk->set),
                 is_secure ? "s" : "ns");
@@ -77,7 +77,7 @@ LRU::findVictim(Addr addr) const
     //std::cout<<"findVictim by tree"<<std::endl;
     int set = extractSet(addr);
     // grab a replacement candidate
-    BlkType *blk = sets[set].blks[sets[set].findTREE()];
+    BlkType *blk = sets[set].blks[sets[set].find2q()];
 
     if (blk->isValid()) {
         DPRINTF(CacheRepl, "set %x: selecting blk %x for replacement\n",
@@ -93,7 +93,7 @@ LRU::insertBlock(PacketPtr pkt, BlkType *blk)
     BaseSetAssoc::insertBlock(pkt, blk);
 
     int set = extractSet(pkt->getAddr());
-    sets[set].setTREEUp(blk);
+    sets[set].insert2q(blk);
 }
 
 void
@@ -103,7 +103,7 @@ LRU::invalidate(CacheBlk *blk)
 
     // should be evicted before valid blocks
     int set = blk->set;
-    sets[set].setTREEDown(blk);
+    sets[set].miss2q(blk);
 }
 
 LRU*

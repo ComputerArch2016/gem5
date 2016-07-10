@@ -56,6 +56,18 @@
 /**
  * An associative set of cache blocks.
  */
+struct node
+{
+    int val = 0;
+    node *next = NULL;
+};
+struct queue
+{
+    int num = 0;
+    node *front = NULL;
+    node *rear = NULL;
+};
+
 template <class Blktype>
 class CacheSet
 {
@@ -67,6 +79,8 @@ class CacheSet
     Blktype **blks;
     int *MRU;
     int MRU_count;
+    queue A1, Am;
+    int A1thres;
 
     /**
      * Find a block matching the tag in this set.
@@ -101,6 +115,14 @@ class CacheSet
     void setTREEDown(Blktype *blk);
 
     int findTREE();
+
+    void hit2q(Blktype *blk);
+
+    void miss2q(Blktype *blk);
+
+    void insert2q(Blktype *blk);
+
+    int find2q();
 };
 
 template <class Blktype>
@@ -244,19 +266,19 @@ CacheSet<Blktype>::setTREEDown(Blktype *blk)
     int last = 0;
     int li = 2;
     do{
-        //std::cout<<"i / index"<<i / index<<std::endl;
+        ////std::cout<<"i / index"<<i / index<<std::endl;
         MRU[last] = i / index;
-        // std::cout<<"down! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
-        //std::cout<<"change MRU[last] down to: "<<MRU[last]<<std::endl;
+        // //std::cout<<"down! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
+        ////std::cout<<"change MRU[last] down to: "<<MRU[last]<<std::endl;
         last = 2 * (last - li / 2 + 1) + i / index + li - 1;
         li *= 2;
         i -= (i / index) * index;
         index /= 2;
     }while(li <= assoc);
-    // std::cout<<"down MRU:"<<std::endl;
+    // //std::cout<<"down MRU:"<<std::endl;
     // for(i = 0; i < assoc; i++)
-    //     std::cout<<MRU[i]<<" ";
-    // std::cout<<std::endl;
+    //     //std::cout<<MRU[i]<<" ";
+    // //std::cout<<std::endl;
 }
 
 template <class Blktype>
@@ -275,17 +297,17 @@ CacheSet<Blktype>::setTREEUp(Blktype *blk)
     do{
         //td::cout<<"i / index"<<i / index<<"~i / index"<<~(i / index)<<std::endl;
         MRU[last] = 1 - (i / index);
-        //std::cout<<"up! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
-        //std::cout<<"change MRU[last] up to: "<<MRU[last]<<std::endl;
+        ////std::cout<<"up! assoc:"<<assoc<<" index:"<<index<<" i:"<<i<<" last:"<<last<<std::endl;
+        ////std::cout<<"change MRU[last] up to: "<<MRU[last]<<std::endl;
         last = 2 * (last - li / 2 + 1) + i / index + li - 1;
         li *= 2;
         i -= (i / index) * index;
         index /= 2;
     }while(li <= assoc);
-    // std::cout<<"up MRU:"<<std::endl;
+    // //std::cout<<"up MRU:"<<std::endl;
     // for(i = 0; i < assoc; i++)
-    //     std::cout<<MRU[i]<<" ";
-    // std::cout<<std::endl;
+    //     //std::cout<<MRU[i]<<" ";
+    // //std::cout<<std::endl;
 }
 
 template <class Blktype>
@@ -294,15 +316,246 @@ CacheSet<Blktype>::findTREE()
 {
     int li = 2;
     int last = 0;
-    //std::cout<<"assoc:"<<assoc<<std::endl;
+    ////std::cout<<"assoc:"<<assoc<<std::endl;
     while(li < assoc)
     {
-        //std::cout<<"last:"<<last<<" MRU[last]:"<<MRU[last]<<" li:"<<li<<" 2 * (last - li / 2 + 1) + MRU[last] + li - 1 = "<<2 * (last - li / 2 + 1) + MRU[last] + li - 1<<std::endl;
+        ////std::cout<<"last:"<<last<<" MRU[last]:"<<MRU[last]<<" li:"<<li<<" 2 * (last - li / 2 + 1) + MRU[last] + li - 1 = "<<2 * (last - li / 2 + 1) + MRU[last] + li - 1<<std::endl;
         last = 2 * (last - li / 2 + 1) + MRU[last] + li - 1;
         li *= 2;
     }
-    //std::cout<<"result:"<<2 * (last - li / 2 + 1) + MRU[last]<<" assoc:"<<assoc<<" last:"<<last<<std::endl;
+    ////std::cout<<"result:"<<2 * (last - li / 2 + 1) + MRU[last]<<" assoc:"<<assoc<<" last:"<<last<<std::endl;
     return 2 * (last - li / 2 + 1) + MRU[last];
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::hit2q(Blktype *blk)
+{
+    //std::cout<<"begin2q"<<std::endl;
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+        if(blks[i] == blk)
+            break;
+    if(i == -1)
+        return;
+    node *tmp = Am.front;
+    if(Am.front)
+    {
+        if(tmp -> val == i)
+        {
+            Am.front = tmp -> next;
+            Am.rear -> next = tmp;
+            Am.rear = tmp;
+            if(!Am.front)
+                Am.front = tmp;
+        }
+        else
+            while(tmp -> next && tmp -> next != Am.rear)
+            {
+                if(tmp -> next -> val == i)
+                {
+                    Am.rear -> next = tmp -> next;
+                    Am.rear = tmp -> next;
+                    if(!Am.front)
+                        Am.front = tmp -> next;
+                    tmp -> next = tmp -> next -> next;
+                    break;
+                }
+                tmp = tmp -> next;
+            }
+    }
+    if(A1.front)
+    {
+        tmp = A1.front;
+        if(tmp -> val == i)
+        {
+            //std::cout<<"368: A1.front = "<<(tmp->next == NULL)<<" and num is "<<A1.num<<std::endl;
+            A1.front = tmp -> next;
+            if(A1.front == NULL)
+                A1.rear = NULL;
+            if(Am.rear)
+                Am.rear -> next = tmp;
+            Am.rear = tmp;
+            if(!Am.front)
+                Am.front = tmp;
+            A1.num--;
+            Am.num++;
+        }
+        else
+        {
+            while(tmp -> next && tmp -> next != A1.rear)
+            {
+                if(tmp -> next -> val == i)
+                {
+                    if(Am.rear)
+                        Am.rear -> next = tmp -> next;
+                    Am.rear = tmp -> next;
+                    if(!Am.front)
+                        Am.front = tmp -> next;
+                    tmp -> next = tmp -> next -> next;
+                    A1.num--;
+                    Am.num++;
+                    break;
+                }
+                tmp = tmp -> next;
+            }
+            if(A1.rear -> val == i)
+            {
+                if(Am.rear)
+                    Am.rear -> next = A1.rear;
+                Am.rear = A1.rear;
+                if(!Am.front)
+                    Am.front = A1.rear;
+                A1.rear = tmp;
+                if(!A1.front)
+                    A1.front = tmp;
+                tmp -> next = NULL;
+                A1.num--;
+                Am.num++;
+            }
+        }
+    }
+    //std::cout<<"end2q"<<std::endl;
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::miss2q(Blktype *blk)
+{
+    //std::cout<<"beginmiss2q"<<std::endl;
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+        if(blks[i] == blk)
+            break;
+    if(i == -1)
+        return;
+    node *tmp, *del = NULL;
+    bool finddel = false;
+    if(A1.front)
+    {
+        tmp = A1.front;
+        del = tmp -> next;
+        if(tmp -> val == i)
+        {
+            //std::cout<<"423: A1.front = "<<(del == NULL)<<" and num is "<<A1.num<<std::endl;
+            A1.front = del;
+            if(A1.front == NULL)
+                A1.rear = NULL;
+            del = tmp;
+            A1.num--;
+            finddel = true;
+        }
+        else
+            while(del)
+            {
+                if(del -> val == i)
+                {
+                    tmp -> next = del -> next;
+                    finddel = true;
+                    A1.num--;
+                    break;
+                }
+                tmp = del;
+                del = del -> next;
+            }
+    }
+    if(!finddel && Am.front)
+    {
+        tmp = Am.front;
+        del = tmp -> next;
+        if(tmp -> val == i)
+        {
+            Am.front = del;
+            del = tmp;
+            Am.num--;
+            finddel = true;
+        }
+        else
+            while(del)
+            {
+                if(del -> val == i)
+                {
+                    tmp -> next = del -> next;
+                    Am.num--;
+                    finddel = true;
+                    break;
+                }
+                tmp = del;
+                del = del -> next;
+            }
+    }
+    if(finddel)
+    {
+        if(A1.num >= A1thres)
+        {
+            del -> next = A1.front;
+            //std::cout<<"473: A1.front = "<<(del == NULL)<<" and num is "<<A1.num<<std::endl;
+            A1.front = del;
+            if(A1.front == NULL)
+                A1.rear = NULL;
+            A1.num++;
+            //std::cout<<"miss2q A1.num++ num is "<<A1.num<<std::endl;
+        }
+        else
+        {
+            del -> next = Am.front;
+            Am.front = del;
+            Am.num++;
+        }
+    }
+    //std::cout<<"endmiss2q"<<std::endl;
+}
+
+template <class Blktype>
+int
+CacheSet<Blktype>::find2q()
+{
+    //std::cout<<"beginfind2q"<<std::endl;
+    int index = 0;
+    if(A1.num >= A1thres)
+    {
+        //std::cout<<"in A1: "<<A1.num<<" "<<A1thres<<std::endl;
+        //std::cout<<"A1.front is "<<(A1.front == NULL)<<std::endl;
+        //std::cout<<"A1.rear is "<<(A1.rear == NULL)<<std::endl;
+        //std::cout<<"A1.front "<<A1.front -> val<<" next is "<<(A1.front -> next == NULL)<<std::endl;
+        index = A1.front -> val;
+        //std::cout<<"500: A1.front = "<<(A1.front -> next == NULL)<<" and num is "<<A1.num<<std::endl;
+        A1.front = A1.front -> next;
+        if(A1.front == NULL)
+                A1.rear = NULL;
+        A1.num--;
+    }
+    else if(Am.front)
+    {
+        index = Am.front -> val;
+        Am.front = Am.front -> next;
+        Am.num--;
+    }
+    //std::cout<<"endfind2q"<<std::endl;
+    return index;
+}
+
+template <class Blktype>
+void
+CacheSet<Blktype>::insert2q(Blktype *blk)
+{
+    //std::cout<<"beginmins2q"<<std::endl;
+    int i = assoc - 1;
+    for(;i >= 0;--i)
+        if(blks[i] == blk)
+            break;
+    if(i == -1)
+        return;
+    node *newnode = new node;
+    newnode -> val = i;
+    if(A1.rear)
+        A1.rear -> next = newnode;
+    else
+        A1.front = newnode;
+    A1.rear = newnode;
+    A1.num++;
+    //std::cout<<"miss2q A1.num++ num is "<<A1.num<<std::endl;
+    //std::cout<<"endins2q"<<std::endl;
 }
 
 #endif
